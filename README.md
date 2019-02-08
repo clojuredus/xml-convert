@@ -18,6 +18,14 @@ Düsseldorf](https://www.youtube.com/channel/UCgw0xUNdc8PMhdux8CEN0Ww):
 
 Das soll nun mit diesem Tool erreicht werden. 
 
+## Usage
+
+Kompilieren `lein uberjar`
+
+Ausführen `java -jar target/xm-convert.jar <url> <output>` 
+
+Default für `url` ist _https://mediathek.hhu.de/rss/7/feed/_, für `output`  _entries.html_.
+
 ## License
 
 Copyright © 2019 clojure-dus

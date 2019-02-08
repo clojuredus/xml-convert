@@ -1,15 +1,53 @@
 (ns xml-convert.core
-  (:require [remus]
-            [hiccup.core :as h]))
+  (:gen-class)
+  (:require [clojure.xml :as xml]
+            [hiccup.core :as h]
+            [clj-time.format :as f]))
 
-(def url "https://mediathek.hhu.de/rss/7/feed/")
+(defn single-group-by
+  "Like group-by but only returns a single value per key"
+  [f coll]
+  (reduce (fn [m e] (assoc m (f e) e)) {} coll))
 
-(def data (remus/parse-url url))
+(defn get-field [entry k]
+  (first (:content (get entry k))))
 
-(def sample-html
-  (h/html [:div.entries
-           [:div.entry
-            [:img {:src "url/vom/thumbnail"}]
-            [:h4 "Titel des Talks"]
-            [:p "Author"]
-            [:p "07.02.2019"]]]))
+(defn normalize-entry [entry]
+  (let [field (partial get-field entry)]
+    {:id         (last (.split (field :guid) "/"))
+     :title      (field :title)
+     :subtitle   (field :itunes:subtitle)
+     :thumbnail  (-> entry :media:thumbnail :attrs :url)
+     :duration   (field :itunes:duration)
+     :author     (field :author)
+     :link       (field :link)
+     :published  (f/parse (f/formatters :rfc822) (field :pubDate))
+     :categories (-> entry :category :content)
+     :summary    (field :itunes:summary)}))
+
+(defn parse-entries [data]
+  (-> data :content first :content
+    (->> (filter #(= :item (:tag %)))
+      (map :content)
+      (map (partial single-group-by :tag))
+      (map normalize-entry))))
+
+(defn render-entry [{:keys [id duration title author summary categories thumbnail link subtitle published]}]
+  [:li.entry {:id id}
+   [:a {:href link}
+    [:img.thumbnail {:src thumbnail}]]
+   [:h4.title title]
+   (when subtitle [:h5.subtitle subtitle])
+   [:p.author author]
+   [:p.published (f/unparse (f/formatter "dd.MM.yyyy") published)]
+   (when summary [:p.summary summary])])
+
+(defn render [entries]
+  [:ol.entries.list-group (->> entries
+                            (sort-by :published) reverse
+                            (map render-entry))])
+
+(defn -main [& args]
+  (let [url    (or (first args) "https://mediathek.hhu.de/rss/7/feed/")
+        output (or (second args) "entries.html")]
+    (->> url xml/parse parse-entries render h/html (spit output))))
